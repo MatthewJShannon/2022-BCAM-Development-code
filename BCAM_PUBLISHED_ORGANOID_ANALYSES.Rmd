@@ -1,0 +1,483 @@
+---
+title: "BCAM PUBLISHED ORGANOID ANALYSES"
+author: "Matthew J Shannon"
+date: "12/08/2022"
+output: html_document
+---
+
+# Load all dependencies
+
+```{r}
+devtools::install_github ('chris-mcginnis-ucsf/DoubletFinder')
+devtools::install_github ('satijalab/seurat-wrappers')
+ remotes::install_github ("mojaveazure/seurat-disk")
+install.packages         ('Seurat')
+install.packages         ('modes')
+install.packages         ('fields')
+library                  (Seurat)
+library                  (Matrix)
+library                  (dplyr)
+library                  (ggplot2)
+library                  (ggpubr)
+library                  (cowplot)
+library                  (tibble)
+library                  (readxl)
+library                  (sctransform)
+library                  (fields)
+library                  (KernSmooth)
+library                  (ROCR)
+library                  (parallel)
+library                  (reshape2)
+library                  (pheatmap)
+library                  (DoubletFinder)
+library                  (clustree)
+library                  (limma)
+library                  (plotly)
+library                  (SeuratWrappers)
+library                  (SeuratDisk)
+library                  (velocyto.R)
+library                  (RColorBrewer)
+library                  (xlsx)
+library                  (enrichplot)
+```
+
+# All stem-cell derived organoids
+
+```{r, Figure 3D UMAP}
+UMAPPlot (hTSCorganoids,
+          label = TRUE,
+          cols  = c('SCTp'  = '#1f77b4',
+                    'CTB 3' = '#ff7f0e',
+                    'CTB 2' = '#e377c2',
+                    'CTB 1' = '#2ca02c',
+                    'EVT 2' = '#d62728',
+                    'EVT 1' = '#8c564b',
+                    'cCTB'  = '#9467bd' )) + NoLegend ()
+```
+
+```{r, Supplemental file 2}
+# Re-run UMAPs that you have accurate calculations for all UMAP(s)
+ stemorganoids3D <- RunUMAP (hTSCorganoids, dims = 1:50, n.components = 3L)
+# Extract UMAP information from Seurat Object
+          umap_1 <- stemorganoids3D [["umap"]]@cell.embeddings [ , 1]
+          umap_2 <- stemorganoids3D [["umap"]]@cell.embeddings [ , 2]
+          umap_3 <- stemorganoids3D [["umap"]]@cell.embeddings [ , 3]
+# Visualize what headings are called so that you can extract them to form a dataframe
+Embeddings (object = stemorganoids3D, reduction = "umap")
+# Prepare a dataframe for cell plotting
+       plot.data <- FetchData (object = stemorganoids3D, vars = c("UMAP_1", "UMAP_2", "UMAP_3", "seurat_clusters"))
+# Make a column of row name identities (these will be your cell/barcode names)
+ plot.data$label <- paste (plot.data$seurat_clusters)
+# Plot your data, in this example my Seurat object had 21 clusters (0-20)
+stemorganoids3D2 <- plot_ly (data      =  plot.data, 
+                              x         = ~UMAP_1,
+                              y         = ~UMAP_2,
+                              z         = ~UMAP_3, 
+                              color     = ~seurat_clusters, 
+                              colors    = c("#ff7f0e",
+                                            "#1f77b4",
+                                            "#2ca02c",
+                                            "#d62728",
+                                            "#e377c2",
+                                            "#8c564b",
+                                            "#9467bd"),
+                              type      = "scatter3d", 
+                              mode      = "markers", 
+                              marker    = list (size = 5, width = 2), # Controls size of points
+                              text      = ~label,                     # This is that extra column we made earlier for which we will use for cell ID
+                              hoverinfo = "text" )                    # Hovering your mouse pointer over a point shows cell names
+stemorganoids3D2
+htmlwidgets::saveWidget      (stemorganoids3D2, "3D_ORG_UMAP.html")
+rm                           (stemorganoids3D)
+rm                           (stemorganoids3D2)
+```
+
+```{r, Table 2.2 analysis}
+DefaultAssay (hTSCorganoids) <- "RNA"
+
+hTSCorganoids.markers <- FindAllMarkers (object   = hTSCorganoids,
+                                         only.pos = TRUE,
+                                         min.pct  = 0.25,
+                                         test.use = "MAST")
+hTSCorganoids.markers %>% group_by (cluster) %>% top_n (10, avg_log2FC)
+```
+
+```{r, Table 2.2 export}
+write.xlsx (hTSCorganoids.markers, file = "Stemorganoids.markers.xlsx")
+```
+
+```{r, Figure 3D heatmap}
+DefaultAssay  (object = hTSCorganoids) <- "RNA"
+
+cluster.averages <- AverageExpression (hTSCorganoids, return.seurat = TRUE)
+
+genelist         <- c("ERVFRD-1", "ERVV-1", "SDC1",  "TFAP2C", "TFAP2A",
+                      "GATA3",    "EGFR",   "GATA2", "KRT7",   "HLA-G",
+                      "ITGA5",    "NOTCH2", "ITGA1", "BMP4",   "NOTCH1",
+                      "SOX9",     "ITGA2",  "YAP1",  "TEAD4",  "TP63",
+                      "ITGA6",    "BCAM",   "PAGE4", "ELF5",   "MKI67", "CCNA2")
+
+my_levels        <- c("CTB 1", "CTB 2", "CTB 3", "cCTB", "EVT 1", "EVT 2", "SCTp")
+
+cluster.averages@active.ident <- factor (cluster.averages@active.ident, levels = my_levels)
+
+DoHeatmap            (cluster.averages,
+                      features     = genelist,
+                      size         = 5,
+                      angle        = 270,
+                      hjust        = 1,
+                      group.bar    = FALSE,
+                      draw.lines   = FALSE,
+                      raster       = FALSE) +
+scale_fill_gradientn (colours      = colorRampPalette (rev (brewer.pal (n = 7, name = "RdYlBu"))) (100)) +
+theme                (text         = element_text     (size  = 40)) + 
+theme                (axis.text    = element_text     (size  = 35)) + 
+theme                (axis.title.y = element_text     (face  = "bold")) +
+theme                (axis.text.y  = element_text     (face  = "italic", hjust = 1)) +
+theme                (axis.text.x  = element_text     (vjust = 0.5, hjust = 0, face = "bold", angle = 270)) + 
+theme                (legend.text  = element_text     (size  = 15))
+```
+
+```{r, Figure 3E feature plots}
+DefaultAssay (hTSCorganoids) <- "RNA"
+FeaturePlot  (hTSCorganoids, features = c("EGFR"),     min.cutoff = 0, order = TRUE, cols = c("grey", "red")) + NoLegend ()
+FeaturePlot  (hTSCorganoids, features = c("TP63"),     min.cutoff = 0, order = TRUE, cols = c("grey", "red")) + NoLegend ()
+FeaturePlot  (hTSCorganoids, features = c("MKI67"),    min.cutoff = 0, order = TRUE, cols = c("grey", "red")) + NoLegend ()
+FeaturePlot  (hTSCorganoids, features = c("ERVFRD-1"), min.cutoff = 0, order = TRUE, cols = c("grey", "red")) + NoLegend ()
+FeaturePlot  (hTSCorganoids, features = c("ITGA2"),    min.cutoff = 0, order = TRUE, cols = c("grey", "red")) + NoLegend ()
+FeaturePlot  (hTSCorganoids, features = c("HLA-G"),    min.cutoff = 0, order = TRUE, cols = c("grey", "red")) + NoLegend ()
+DefaultAssay (hTSCorganoids) <- "integrated"
+```
+
+```{r, Figure 3E violin plots}
+VlnPlot (hTSCorganoids, features = c("EGFR"),     assay = "RNA", pt.size = 0) + NoLegend ()
+VlnPlot (hTSCorganoids, features = c("TP63"),     assay = "RNA", pt.size = 0) + NoLegend ()
+VlnPlot (hTSCorganoids, features = c("MKI67"),    assay = "RNA", pt.size = 0) + NoLegend ()
+VlnPlot (hTSCorganoids, features = c("ERVFRD-1"), assay = "RNA", pt.size = 0) + NoLegend ()
+VlnPlot (hTSCorganoids, features = c("ITGA2"),    assay = "RNA", pt.size = 0) + NoLegend ()
+VlnPlot (hTSCorganoids, features = c("HLA-G"),    assay = "RNA", pt.size = 0) + NoLegend ()
+```
+
+```{r, Figure 4H}
+DefaultAssay (hTSCorganoids) <- "RNA"
+FeaturePlot  (hTSCorganoids, features = c("BCAM"), label = FALSE, min.cutoff = 0, order = TRUE, cols = c("grey", "red")) + NoLegend ()
+DefaultAssay (hTSCorganoids) <- "integrated"
+```
+
+# hTSC cell line-specific UMAPs
+
+```{r, Figure 3F hTSC cell line-specific UMAPs}
+UMAPPlot (hTSCorganoids,
+          label    = TRUE,
+          split.by = 'ID',
+          cols     = c('SCTp'  = '#1f77b4',
+                       'CTB 3' = '#ff7f0e',
+                       'CTB 2' = '#e377c2',
+                       'CTB 1' = '#2ca02c',
+                       'EVT 2' = '#d62728',
+                       'EVT 1' = '#8c564b',
+                       'cCTB'  = '#9467bd' )) + NoLegend ()
+```
+
+```{r, Figure 3F heatmap}
+hTSCorganoids$celltype.ID    <- paste  (Idents (hTSCorganoids), hTSCorganoids$ID, sep = "_")
+hTSCorganoids$celltype       <- Idents (hTSCorganoids)
+Idents       (hTSCorganoids) <- "celltype.ID"
+DefaultAssay (hTSCorganoids) <- "RNA"
+table        (hTSCorganoids$celltype.ID)
+
+cluster.averages <- AverageExpression (hTSCorganoids, return.seurat = TRUE)
+
+genelist <- c("ERVFRD-1", "ERVV-1", "SDC1",  "TFAP2C", "TFAP2A",
+              "GATA3",    "EGFR",   "GATA2", "KRT7",   "HLA-G",
+              "ITGA5",    "NOTCH2", "ITGA1", "BMP4",   "NOTCH1",
+              "SOX9",     "ITGA2",  "YAP1",  "TEAD4",  "TP63",
+              "ITGA6",    "BCAM",   "PAGE4", "ELF5",   "MKI67", "CCNA2")
+
+my_levels <- c("CTB 1_CT27", "CTB 1_CT29", "CTB 1_CT30",
+               "CTB 2_CT27", "CTB 2_CT29", "CTB 2_CT30",
+               "CTB 3_CT27", "CTB 3_CT29", "CTB 3_CT30",
+               "cCTB_CT27",  "cCTB_CT29",  "cCTB_CT30",
+               "EVT 1_CT27", "EVT 1_CT29", "EVT 1_CT30",
+               "EVT 2_CT27", "EVT 2_CT29", "EVT 2_CT30",
+               "SCTp_CT27",  "SCTp_CT29",  "SCTp_CT30")
+
+cluster.averages@active.ident <- factor (cluster.averages@active.ident, levels = my_levels)
+
+DoHeatmap            (cluster.averages,
+                      features     = genelist,
+                      size         = 5,
+                      angle        = 270,
+                      hjust        = 1,
+                      group.bar    = FALSE,
+                      draw.lines   = FALSE,
+                      raster       = FALSE) +
+scale_fill_gradientn (colours      = colorRampPalette (rev (brewer.pal (n = 7, name = "RdYlBu"))) (100)) +
+theme                (text         = element_text     (size  = 40)) + 
+theme                (axis.text    = element_text     (size  = 35)) + 
+theme                (axis.title.y = element_text     (face  = "bold")) +
+theme                (axis.text.y  = element_text     (face  = "italic", hjust = 1)) +
+theme                (axis.text.x  = element_text     (vjust = 0.5, hjust = 0, face = "bold", angle = 270)) + 
+theme                (legend.text  = element_text     (size  = 15))
+
+DefaultAssay  (hTSCorganoids) <- "integrated"
+```
+
+```{r, Figure 3G}
+ggplot             (hTSCorganoids@meta.data, aes (x = c(hTSCorganoids$ID), fill = hTSCorganoids$seurat_clusters)) + 
+geom_bar           (position     = "fill") + 
+theme_classic2     () +
+scale_y_continuous (labels       = scales::percent) +
+theme              (text         = element_text (size  = 35)) + 
+theme              (axis.text    = element_text (size  = 35)) + 
+theme              (axis.title.x = element_text (face  = "bold")) +
+theme              (axis.title.y = element_text (face  = "bold")) + 
+theme              (legend.text  = element_text (size  = 15)) +
+theme              (axis.text.y  = element_text (angle = 90)) +
+theme              (axis.text.y  = element_text (hjust = 0.5)) +
+theme              (axis.text.x  = element_text(colour = "black")) +
+theme              (axis.text.y  = element_text(colour = "black")) +
+xlab               ("Gestational Age") +
+ylab               ("Cell Proportion") +
+scale_fill_manual  (values       = c('SCTp'  = '#1f77b4',
+                                     'CTB 3' = '#ff7f0e',
+                                     'CTB 2' = '#e377c2',
+                                     'CTB 1' = '#2ca02c',
+                                     'EVT 2' = '#d62728',
+                                     'EVT 1' = '#8c564b',
+                                     'cCTB'  = '#9467bd' )) + NoLegend ()
+```
+
+```{r, Figure 4I}
+P1 <- VlnPlot (CT27, features = c("BCAM"), assay = "RNA", pt.size = 0) + NoLegend ()
+P2 <- VlnPlot (CT29, features = c("BCAM"), assay = "RNA", pt.size = 0) + NoLegend ()
+P3 <- VlnPlot (CT30, features = c("BCAM"), assay = "RNA", pt.size = 0) + NoLegend ()
+
+ggarrange (P1, P2, P3, heights = c (5, 5, 5), ncol = 1, nrow = 3, align = "v")
+```
+
+# CT27 specific organoids
+
+```{r, Supplemental figure 4A CT27 UMAP}
+UMAPPlot (CT27,
+          label = TRUE,
+          cols  = c('SCTp'  = '#1f77b4',
+                    'CTB 3' = '#ff7f0e',
+                    'CTB 2' = '#e377c2',
+                    'CTB 1' = '#2ca02c',
+                    'EVT 2' = '#d62728',
+                    'EVT 1' = '#8c564b',
+                    'cCTB'  = '#9467bd' )) + NoLegend ()
+```
+
+```{r, Supplemental figure 4C CT27 UMAP}
+FeaturePlot (CT27, features = c("BCAM"), label = FALSE, min.cutoff = 0, order = TRUE, cols = c("grey", "red")) + NoLegend ()
+```
+
+# CT29 specific organoids
+
+```{r, Supplemental figure 4A CT29 UMAP}
+UMAPPlot (CT29,
+          label = TRUE,
+          cols  = c('SCTp'  = '#1f77b4',
+                    'CTB 3' = '#ff7f0e',
+                    'CTB 2' = '#e377c2',
+                    'CTB 1' = '#2ca02c',
+                    'EVT 2' = '#d62728',
+                    'EVT 1' = '#8c564b',
+                    'cCTB'  = '#9467bd' )) + NoLegend ()
+```
+
+```{r, Supplemental figure 4C CT29 UMAP}
+FeaturePlot (CT29, features = c("BCAM"), label = FALSE, min.cutoff = 0, order = TRUE, cols = c("grey", "red")) + NoLegend ()
+```
+
+# CT30 specific organoids
+
+```{r, Supplemental figure 4A CT30 UMAP}
+UMAPPlot (CT30,
+          label = TRUE,
+          cols  = c('SCTp'  = '#1f77b4',
+                    'CTB 3' = '#ff7f0e',
+                    'CTB 2' = '#e377c2',
+                    'CTB 1' = '#2ca02c',
+                    'EVT 2' = '#d62728',
+                    'EVT 1' = '#8c564b',
+                    'cCTB'  = '#9467bd' )) + NoLegend ()
+```
+
+```{r, Supplemental figure 4C CT30 UMAP}
+FeaturePlot (CT30, features = c("BCAM"), label = FALSE, min.cutoff = 0, order = TRUE, cols = c("grey", "red")) + NoLegend ()
+```
+
+# Placental villi versus Trophoblast Organoid CTB Origin Comparison
+
+```{r}
+# Set RNA assay for DEG
+DefaultAssay (object = Trophoblasts)  <- "RNA"
+DefaultAssay (object = stemorganoids) <- "RNA"
+villusCTBoriginmarkers   <- FindMarkers (object = Trophoblasts,
+                            ident.1             = "CTB 2",
+                            ident.2             = NULL,
+                            assay               = "RNA",
+                            test.use            = "MAST",
+                            logfc.threshold     = -Inf,
+                            min.pct             = -Inf,
+                            min.diff.pct        = -Inf,
+                            only.pos            = TRUE,
+                            slot                = "data")
+villusCTBoriginmarkers   %>% top_n (50, avg_log2FC)
+organoidCTBoriginmarkers <- FindMarkers (object = stemorganoids,
+                            ident.1             = "CTB 1",
+                            ident.2             = NULL,
+                            assay               = "RNA",
+                            test.use            = "MAST",
+                            logfc.threshold     = -Inf,
+                            min.pct             = -Inf,
+                            min.diff.pct        = -Inf,
+                            only.pos            = TRUE,
+                            slot                = "data")
+organoidCTBorigin_markers %>% top_n (50, avg_log2FC)
+CTBorigin_markers <- rbind (villusCTBorigin_markers, organoidCTBorigin_markers)
+```
+
+```{r, Figure 3F}
+venn.diagram (x              = list (row.names (villusCTBorigin_markers),
+                                     row.names (organoidCTBorigin_markers)),
+              category.names = c    ("Tissue", "Organoid"),
+              filename       = 'Full_CTBorigin_comparison_Venn.png',
+              output         = TRUE,
+              imagetype      = "png",
+              scaled         = FALSE,
+              col            = "black",
+              cat.cex        = 2,
+              margin         = 0.15)
+```
+
+```{r, Table 3.2 analysis}
+venn_table <- get.venn.partitions (x             = list (row.names (  villusCTBorigin_markers),
+                                                         row.names (organoidCTBorigin_markers)),
+                                   force.unique  = TRUE,
+                                   keep.elements = TRUE,
+                                   hierarchical  = FALSE)
+venn_table
+venn_table$..values..
+ 
+RVenn1 <- venn_table$..values..$`1`
+RVenn2 <- venn_table$..values..$`2`
+RVenn3 <- venn_table$..values..$`3`
+```
+
+```{r, Table 3.2 export}
+write.xlsx (RVenn1, file = "Fig3_origin_venn1.xlsx")
+write.xlsx (RVenn2, file = "Fig3_origin_venn2.xlsx")
+write.xlsx (RVenn3, file = "Fig3_origin_venn3.xlsx")
+```
+
+# Placental villi versus Trophoblast Organoid CTB Origin Differential Gene Expression Analysis
+
+```{r, Table 4.2 analysis}
+villiorigin    <- subset (Trophoblasts,  idents =  c("CTB 2"))
+organoidorigin <- subset (stemorganoids, idents =  c("CTB 1"))
+Origin         <- merge  (villiorigin,
+                          y          = organoidorigin,
+                          merge.data = TRUE,
+                          project    = "Origin")
+
+# Origin Differential Expression
+DefaultAssay                 (object = Origin) <- "RNA"
+Origin.MAST   <- FindMarkers (Origin,
+                              ident.1         = 'CTB 2',
+                              ident.2         = 'CTB 1',
+                              test.use        = "MAST",
+                              logfc.threshold = -Inf,
+                              min.pct         = -Inf,
+                              min.diff.pct    = -Inf)
+```
+
+```{r, Table 4.2 export}
+write.xlsx (Origin.MAST,  file = "Origin_DEG.markers.xlsx")
+```
+
+```{r, Figure 3G}
+EnhancedVolcano            (Origin.MAST,
+                            lab             = rownames (Origin.MAST),
+                            x               = "avg_log2FC",
+                            y               = "p_val_adj",
+                            FCcutoff        = 1.00,
+                            pCutoff         = 10e-125,
+                            pointSize       = 4.0,
+                            col             = c('grey', 'grey', 'grey', 'red'),
+                            colAlpha        = 1,
+                            gridlines.major = FALSE,
+                            gridlines.minor = FALSE) + NoLegend () + ggtitle (NULL)
+```
+
+```{r, Figure 3H analysis}
+# Gene Ontology on DEG Results 
+                            Origin_list  <- Origin.MAST$avg_log2FC
+# name the vector
+              names        (Origin_list) <- rownames (Origin.MAST)
+# sort the list in decreasing order (required for clusterProfiler)
+Origin_list = sort         (Origin_list, decreasing = TRUE)
+gseOrigin <-  gseGO        (geneList      = Origin_list, 
+                            ont           = "ALL", 
+                            keyType       = "SYMBOL", 
+                            nPerm         = 100000, 
+                            minGSSize     = 1, 
+                            maxGSSize     = 800, 
+                            pvalueCutoff  = 0.5, 
+                            verbose       = TRUE, 
+                            OrgDb         = org.Hs.eg.db, 
+                            pAdjustMethod = "BH")
+```
+
+```{r, Figure 3H}
+pdf     ("Origin_GO.pdf", width = 25, height = 10)
+dotplot (gseOrigin, showCategory = 4, split = ".sign") + facet_grid (.~.sign)
+dev.off ()
+```
+
+# BCAM hi versus BCAM lo Differential Expression Analysis
+
+```{r, Figure 4G analysis}
+CTB1 <- subset (CT29, idents = "CTB 1")
+
+Idents (CTB1, WhichCells (CTB1, expression = BCAM >= 0.5, slot = 'data')) <- 'BCAMhi'
+Idents (CTB1, WhichCells (CTB1, expression = BCAM == 0.0, slot = 'data')) <- 'BCAMlo'
+BCAM.MAST <- FindMarkers (CTB1,
+                          ident.1         = 'BCAMhi',
+                          ident.2         = 'BCAMlo',
+                          test.use        = "MAST",
+                          logfc.threshold = -Inf,
+                          min.pct         = -Inf,
+                          min.diff.pct    = -Inf)
+```
+
+```{r, Figure 4G}
+Idents       (CT29, WhichCells (CT29, expression = BCAM >= 0.5, slot = 'data')) <- 'BCAMhi'
+Idents       (CT29, WhichCells (CT29, expression = BCAM == 0.0, slot = 'data')) <- 'BCAMlo'
+DefaultAssay (object = CT29) <- "RNA"
+cluster.averages <- AverageExpression (CT29, return.seurat = TRUE)
+genelist         <- c("BCAM", "LRAP1", "PEG10",  "SPINT2", "EPCAM", "LAMB1", "PDLIM1", "HMGB3")
+my_levels        <- c("BCAMhi", "BCAMlo")
+cluster.averages@active.ident <- factor (cluster.averages@active.ident, levels = my_levels)
+pdf                  ("CT29_BCAM_DEG.pdf", width = 15, height = 20)
+DoHeatmap            (cluster.averages,
+                      features     = genelist,
+                      size         = 5,
+                      angle        = 270,
+                      hjust        = 1,
+                      group.bar    = FALSE,
+                      draw.lines   = FALSE,
+                      raster       = FALSE) +
+scale_fill_gradientn (colours      = colorRampPalette (rev (brewer.pal (n = 7, name = "RdYlBu"))) (100)) +
+theme                (text         = element_text     (size  = 40)) + 
+theme                (axis.text    = element_text     (size  = 35)) + 
+theme                (axis.title.y = element_text     (face  = "bold")) +
+theme                (axis.text.y  = element_text     (face  = "italic", hjust = 1)) +
+theme                (axis.text.x  = element_text     (vjust = 0.5, hjust = 0, face = "bold", angle = 270)) + 
+theme                (legend.text  = element_text     (size  = 15)) +
+NoLegend             ()
+dev.off              ()
+```

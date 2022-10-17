@@ -1,0 +1,187 @@
+---
+title: "PUBLISHED INTERFACE ANALYSES"
+author: "Matthew J Shannon"
+date: "12/08/2022"
+output: html_document
+---
+
+# Load all dependencies
+
+```{r}
+devtools::install_github ('chris-mcginnis-ucsf/DoubletFinder')
+devtools::install_github ('satijalab/seurat-wrappers')
+remotes::install_github  ("mojaveazure/seurat-disk")
+devtools::install_github ("velocyto-team/velocyto.R")
+BiocManager::install     ("pcaMethods")
+BiocManager::install     ('MAST')
+BiocManager::install     ('org.Hs.eg.db')
+BiocManager::install     (version = "3.12")
+BiocManager::install     ('Seurat')
+BiocManager::install     ('readxl')
+BiocManager::install     ('modes')
+BiocManager::install     ('pheatmap')
+BiocManager::install     ('limma')
+BiocManager::install     ('clustree')
+BiocManager::install     ('clusterProfiler')
+BiocManager::install     ('EnhancedVolcano')
+install.packages         ('fields')
+install.packages         ('plotly')
+install.packages         ("VennDiagram")
+library                  (Seurat)
+library                  (Matrix)
+library                  (dplyr)
+library                  (ggplot2)
+library                  (cowplot)
+library                  (tibble)
+library                  (readxl)
+library                  (sctransform)
+library                  (fields)
+library                  (KernSmooth)
+library                  (ROCR)
+library                  (parallel)
+library                  (reshape2)
+library                  (pheatmap)
+library                  (DoubletFinder)
+library                  (limma)
+library                  (SeuratWrappers)
+library                  (SeuratDisk)
+library                  (plotly)
+library                  (clustree)
+library                  (velocyto.R)
+library                  (MAST)
+library                  (EnhancedVolcano)
+library                  (clusterProfiler)
+library                  (AnnotationDbi)
+library                  (org.Hs.eg.db)
+library                  (VennDiagram)
+library                  (RColorBrewer)
+```
+
+```{r, Figure 1B}
+UMAPPlot (Interface, label = FALSE) + NoLegend ()
+```
+
+```{r, Supplemental Figure 1B}
+VlnPlot (Interface, features = c("nFeature_RNA"), group.by = "ID", pt.size = 0) + geom_boxplot (width = 0.25, fill = "white")
+```
+
+```{r, Supplemental Figure 1C}
+VlnPlot (Interface, features = c("nCount_RNA"), group.by = "ID", pt.size = 0) + geom_boxplot (width = 0.25, fill = "white")
+```
+
+```{r, Supplemental Figure 1D}
+VlnPlot (Interface, features = c("percent.mt"), group.by = "ID", pt.size = 0) + geom_boxplot (width = 0.25, fill = "white")
+```
+
+```{r, Supplemental Figure 1E}
+PCAPlot (Interface, label = FALSE, group.by   = "Source") + NoLegend ()
+PCAPlot (Interface, label = FALSE, order = FALSE, group.by = "Tissue") + NoLegend ()
+```
+
+```{r, Supplemental Figure 1F}
+UMAPPlot (Interface, label = FALSE, split.by = "GA") + NoLegend ()
+```
+
+```{r, Supplemental figure 1G}
+DefaultAssay (Interface) <- "RNA"
+
+cluster.averages <- AverageExpression (Interface, return.seurat = TRUE)
+
+           Genes <- c("CD34",   "ITGA2",  "KIT",      "ENTPD1",  "ITGAX", "NCAM1",  "HLA-A",  "HLA-B",  "HLA-C",  "PTPRC",
+                      "KLRB1",  "CD8A",   "IL7R",     "MS4A2",   "CD3G",  "FOXP3",  "FCER1A", "CD1C",   "CLEC9A", "S100A12",
+                      "IL1B",   "FCGR3A", "CD14",     "CD4",     "LYVE1", "MKI67",  "VCAM1",  "COL6A2", "DLK1",   "PDGFRB",
+                      "MCAM",   "ITGA1",  "ACTA2",    "MYH11",   "DKK1",  "IGFBP1", "CD59",   "PRL",    "VIM",    "EPCAM",
+                      "BCAM",   "TP63",   "ITGA6",    "NANOG",   "YAP1",  "CDX2",   "TEAD4",  "PAGE4",  "TFAP2C", "EGFR",
+                      "TFAP2A", "ERVW-1", "ERVFRD-1", "LGALS13", "ERVV-1","SDC1",   "CGB",    "GATA2",  "GATA3",  "KRT7", "HLA-G", "ITGA5")
+           
+       my_levels <- c("13", "22", "2",  "26", "1",  "19", "5", "20", "14", "30",
+                      "3",  "25", "16", "27", "15", "10", "4", "24", "6",  "23",
+                      "28", "29", "21", "8",  "11", "0",  "7", "18", "17", "12", "9")
+       
+cluster.averages@active.ident <- factor (cluster.averages@active.ident, levels = my_levels)
+
+DoHeatmap            (cluster.averages,
+                      features     = Genes,
+                      size         = 5,
+                      angle        = 270,
+                      hjust        = 1,
+                      group.bar    = FALSE,
+                      draw.lines   = FALSE,
+                      raster       = FALSE) +
+scale_fill_gradientn (colours      = colorRampPalette (rev (brewer.pal (n = 7, name = "RdYlBu"))) (100)) +
+theme                (text         = element_text     (size  = 40)) + 
+theme                (axis.text    = element_text     (size  = 25)) + 
+theme                (axis.title.y = element_text     (face  = "bold")) +
+theme                (axis.text.y  = element_text     (face  = "italic", hjust = 1)) +
+theme                (axis.text.x  = element_text     (vjust = 0.5, hjust = 0, face = "bold", angle = 270)) + 
+theme                (legend.text  = element_text     (size  = 15))
+
+rm (cluster.averages)
+```
+
+```{r, Supplemental figure 1H}
+ggplot             (Interface@meta.data, aes (x = c(Interface$seurat_clusters), fill = Interface$Phase)) + 
+geom_bar           (position     = "fill") + 
+theme_classic2     () +
+scale_y_continuous (labels       = scales::percent) +
+theme              (text         = element_text (size  = 35)) + 
+theme              (axis.text    = element_text (size  = 35)) + 
+theme              (axis.title.x = element_text (face  = "bold")) +
+theme              (axis.title.y = element_text (face  = "bold")) + 
+theme              (legend.text  = element_text (size  = 15)) +
+theme              (axis.text.y  = element_text (angle = 90)) +
+theme              (axis.text.y  = element_text (hjust = 0.5)) +
+theme              (axis.text.x  = element_text(colour = "black")) +
+theme              (axis.text.y  = element_text(colour = "black")) +
+xlab               ("Cluster") +
+ylab               ("Cell Phase Proportion") + 
+theme              (strip.background = element_blank (), text = element_text (face  = "bold", size = 50))
+```
+
+```{r, Supplemental figure 1I}
+DefaultAssay (Interface) <- "RNA"
+FeaturePlot  (Interface, features = c("VIM"),   label = FALSE, min.cutoff = 0, order = TRUE, cols = c("grey", "red")) + NoLegend ()
+FeaturePlot  (Interface, features = c("PTPRC"), label = FALSE, min.cutoff = 0, order = TRUE, cols = c("grey", "red")) + NoLegend ()
+FeaturePlot  (Interface, features = c("CD34"),  label = FALSE, min.cutoff = 0, order = TRUE, cols = c("grey", "red")) + NoLegend ()
+FeaturePlot  (Interface, features = c("VCAM1"), label = FALSE, min.cutoff = 0, order = TRUE, cols = c("grey", "red")) + NoLegend ()
+FeaturePlot  (Interface, features = c("ACTA2"), label = FALSE, min.cutoff = 0, order = TRUE, cols = c("grey", "red")) + NoLegend ()
+DefaultAssay (Interface) <- "integrated"
+```
+
+```{r, Supplemental figure 1J}
+DefaultAssay (Interface) <- "RNA"
+FeaturePlot  (Interface, features = c("KRT7"),   label = FALSE, min.cutoff = 0, order = TRUE, cols = c("grey", "red")) + NoLegend ()
+FeaturePlot  (Interface, features = c("EGFR"),   label = FALSE, min.cutoff = 0, order = TRUE, cols = c("grey", "red")) + NoLegend ()
+FeaturePlot  (Interface, features = c("TP63"),   label = FALSE, min.cutoff = 0, order = TRUE, cols = c("grey", "red")) + NoLegend ()
+FeaturePlot  (Interface, features = c("TFAP2A"), label = FALSE, min.cutoff = 0, order = TRUE, cols = c("grey", "red")) + NoLegend ()
+FeaturePlot  (Interface, features = c("TFAP2C"), label = FALSE, min.cutoff = 0, order = TRUE, cols = c("grey", "red")) + NoLegend ()
+DefaultAssay (Interface) <- "integrated"
+```
+
+```{r, Supplemental figure 2A analysis}
+Idents (Interface)       <- Interface@meta.data$Source
+Beristain.Int            <- subset (Interface, idents = c("1"))
+Vento.Tormo.Int          <- subset (Interface, idents = c("2"))
+Idents (Beristain.Int)   <- Beristain.Int@meta.data$seurat_clusters
+Idents (Vento.Tormo.Int) <- Vento.Tormo.Int@meta.data$seurat_clusters
+Beristain.Int
+Vento.Tormo.Int
+```
+
+```{r, Supplemental figure 2A}
+UMAPPlot (Beristain.Int,   label = FALSE) + NoLegend ()
+UMAPPlot (Vento.Tormo.Int, label = FALSE, ) + NoLegend ()
+```
+
+```{r, Supplemental figure 2B analysis}
+Idents (Interface)     <- "Source"
+        Interface      <- RenameIdents  (Interface, c(`1` = "GSE174481", `2` = "E-MTAB-6701"))
+    avg.Interface      <- as.data.frame (log1p (AverageExpression (Interface, verbose = FALSE)$RNA))
+    avg.Interface$gene <- rownames      (avg.Interface)
+Idents (Interface)     <- "seurat_clusters"
+```
+
+```{r, Supplemental figure 2B}         
+ggplot (avg.Interface, aes (`GSE174481`, `E-MTAB-6701`)) + geom_point () + ggtitle ("")
+cor    (avg.Interface$GSE174481, avg.Interface$`E-MTAB-6701`)
+```

@@ -1,0 +1,289 @@
+---
+title: "BCAM PUBLISHED PSEUDOTIME ANALYSES"
+author: "Matthew J Shannon"
+date: "12/08/2022"
+output: html_document
+---
+
+# Load all dependencies
+
+```{r, include = FALSE}
+devtools::install_github  ('chris-mcginnis-ucsf/DoubletFinder')
+if     (!requireNamespace ("BiocManager", quietly = TRUE) )
+install.packages          ("BiocManager")
+install.packages          ('Seurat')
+install.packages          ('modes')
+install.packages          ('fields')
+BiocManager::install      ("monocle")
+library                   (Seurat)
+library                   (Matrix)
+library                   (dplyr)
+library                   (ggplot2)
+library                   (cowplot)
+library                   (tibble)
+library                   (readxl)
+library                   (sctransform)
+library                   (fields)
+library                   (KernSmooth)
+library                   (ROCR)
+library                   (parallel)
+library                   (reshape2)
+library                   (pheatmap)
+library                   (DoubletFinder)
+library                   (monocle)
+library                   (limma)
+library                   (RColorBrewer)
+```
+
+# Convert the trophoblast Seurat dataset into a CellDataSet that is compatible with Monocle2
+
+```{r, Supplemental figure 3B/C analysis}
+Trophoblast.monocle <- as.CellDataSet (Trophoblasts, assay  =   "RNA")
+                       rm             (Trophoblasts)
+```
+
+# Monocle2 Analysis
+
+```{r, Supplemental figure 3B/C analysis}
+Trophoblast.monocle                 <- estimateSizeFactors (Trophoblast.monocle)
+Trophoblast.monocle                 <- estimateDispersions (Trophoblast.monocle)
+Trophoblast.monocle                 <- detectGenes         (Trophoblast.monocle, min_expr = 0.1)
+                                       print               (head   (fData (Trophoblast.monocle)))
+Trophoblast.monocle_expressed_genes <- row.names           (subset (fData (Trophoblast.monocle), num_cells_expressed >= 10))
+```
+
+```{r, Supplemental figure 3B/C analysis}
+ERVFRD_id              <- row.names            (subset (fData (Trophoblast.monocle), gene_short_name == "ERVFRD-1"))
+HLAG_id                <- row.names            (subset (fData (Trophoblast.monocle), gene_short_name == "HLA-G"   ))
+EGFR_id                <- row.names            (subset (fData (Trophoblast.monocle), gene_short_name == "EGFR"    ))
+SPINT1_id              <- row.names            (subset (fData (Trophoblast.monocle), gene_short_name == "SPINT1"  ))
+Trophoblast.monocle.2  <- newCellTypeHierarchy ()
+Trophoblast.monocle.2  <- addCellType          (Trophoblast.monocle.2,
+                                                "SCT",
+                                               classify_func = function (x) { x [ERVFRD_id,  ]  >= 2   })
+Trophoblast.monocle.2  <- addCellType          (Trophoblast.monocle.2,
+                                                "EVT",
+                                               classify_func = function (x) { x [HLAG_id,    ]  >= 3   })
+Trophoblast.monocle.2  <- addCellType          (Trophoblast.monocle.2,
+                                                "CTB",
+                                               classify_func = function (x) { x [EGFR_id,    ]  >  3.0 &
+                                                                              x [SPINT1_id,  ]  >  3.0 &
+                                                                              x [ERVFRD_id,  ]  <  2 &
+                                                                              x [HLAG_id,    ]  <  3 })
+Trophoblast.monocle    <- classifyCells        (Trophoblast.monocle, Trophoblast.monocle.2)
+```
+
+```{r, Supplemental figure 3B/C analysis}
+marker_diff              <- markerDiffTable   (Trophoblast.monocle   [Trophoblast.monocle_expressed_genes, ],
+                                               Trophoblast.monocle.2,
+                                               cores = 1)
+semisup_clustering_genes <- row.names         (marker_diff)[order (marker_diff$qval)][1:1500]
+Trophoblast.monocle      <- setOrderingFilter (Trophoblast.monocle, semisup_clustering_genes)
+Trophoblast.monocle      <- reduceDimension   (Trophoblast.monocle,
+                                               max_components = 2,
+                                               method         = 'DDRTree',
+                                               norm_method    = 'none',
+                                               pseudo_expr    = 0)
+Trophoblast.monocle      <- orderCells        (Trophoblast.monocle)
+Trophoblast.monocle      <- orderCells        (Trophoblast.monocle, root_state = 3)
+```
+
+```{r, Supplemental figure 3B}
+plot_cell_trajectory (Trophoblast.monocle, color_by = "seurat_clusters") + theme (legend.position = "right")
+plot_cell_trajectory (Trophoblast.monocle, color_by = "Pseudotime")      + theme (legend.position = "right")
+```
+
+```{r, Supplemental figure 3C}
+plot_cell_trajectory (Trophoblast.monocle, markers = "BCAM", use_color_gradient = TRUE) + NoLegend ()
+```
+
+```{r, Figure 2E analysis}
+BEAM_res <- BEAM     (Trophoblast.monocle,
+                      branch_point = 1,
+                      cores        = 1)
+BEAM_res <- BEAM_res [order (BEAM_res$qval), ]
+BEAM_res <- BEAM_res [ , c("gene_short_name", "pval", "qval")]
+head (BEAM_res)
+```
+
+```{r, Figure 2E analysis}
+F2E_genes <- row.names (subset (fData (Trophoblast.monocle), gene_short_name %in% c("CDX2",
+                                                                                    "TEAD4",
+                                                                                    "EPCAM",
+                                                                                    "ELF5",
+                                                                                    "TP63",
+                                                                                    "YAP1",
+                                                                                    "ERVFRD-1",
+                                                                                    "HLA-G",
+                                                                                    "SMAGP",
+                                                                                    "SPINT1",
+                                                                                    "TINAGL1",
+                                                                                    "EFEMP1",
+                                                                                    "OLR1",
+                                                                                    "ISYNA1",
+                                                                                    "DUSP9",
+                                                                                    "MORC4",
+                                                                                    "SERINC2",
+                                                                                    "IFI6",
+                                                                                    "GSTA3",
+                                                                                    "ACSS1",
+                                                                                    "FAM3B",
+                                                                                    "SLC22A11",
+                                                                                    "MEST",
+                                                                                    "PHLDA2",
+                                                                                    "MPP1",
+                                                                                    "FXYD3",
+                                                                                    "PISD",
+                                                                                    "PNP",
+                                                                                    "SERPINF1",
+                                                                                    "BCAM",
+                                                                                    "VAMP8",
+                                                                                    "COMT")))
+```
+
+```{r, Figure 2E}
+my_branched_heatmap  <- plot_genes_branched_heatmap (Trophoblast.monocle[F2E_genes, ],
+                                                     branch_point        = 1,
+                                                     branch_labels       = c("EVT", "SCT"),
+                                                     cores               = 1,
+                                                     use_gene_short_name = TRUE,
+                                                     show_rownames       = TRUE,
+                                                     cluster_rows        = FALSE,
+                                                     num_clusters        = 1, 
+                                                     return_heatmap      = FALSE )
+```
+
+# Monocle3 Analysis
+
+## Re-install dependencies to avoid conflict between Monocle2 and Monocle3
+
+```{r}
+if (!requireNamespace    ("BiocManager", quietly = TRUE))
+install.packages         ("BiocManager")
+BiocManager::install     (version = "3.9")
+BiocManager::install     (c('BiocGenerics',
+                            'DelayedArray',
+                            'DelayedMatrixStats',
+                            'limma',
+                            'S4Vectors',
+                            'SingleCellExperiment',
+                            'SummarizedExperiment',
+                            'batchelor',
+                            'Matrix.utils'))
+install.packages          ("devtools")
+install.packages          ("rlang", update = TRUE, dependencies = TRUE)
+devtools::install_github  ('cole-trapnell-lab/leidenbase', force = TRUE)
+Sys.setenv                (R_REMOTES_NO_ERRORS_FROM_WARNINGS = "true")
+devtools::install_github  ('cole-trapnell-lab/monocle3', ref = "develop")
+library                   (monocle3)
+library                   (Seurat)
+remotes::install_version  ("spatstat", version = "1.64-1")
+BiocManager::install      ("ggpubr")
+library                   (SeuratWrappers)
+library                   (ggplot2)
+library                   (patchwork)
+library                   (magrittr)
+library                   (ggpubr)
+```
+
+```{r, Figure 2B trajectory analysis}
+cds <- as.cell_data_set      (Trophoblasts, assay = "RNA")
+cds <- estimate_size_factors (cds)
+cds <- cluster_cells         (cds,
+                              reduction_method = c("UMAP"),
+                              cluster_method   = "leiden",
+                              partition_qval   = 0.05,
+                              resolution       = 0.00025)
+p1  <- plot_cells            (cds,                               show_trajectory_graph = FALSE)
+p2  <- plot_cells            (cds, color_cells_by = "partition", show_trajectory_graph = FALSE)
+wrap_plots (p1, p2)
+```
+
+```{r, Figure 2B trajectory analysis}
+cds <- learn_graph (cds,
+                    use_partition = FALSE,
+                    close_loop    = TRUE)
+```
+
+```{r, Figure 2B left trajectory}
+plot_cells (cds,
+            label_cell_groups             = FALSE,
+            label_leaves                  = FALSE,
+            label_branch_points           = FALSE,
+            color_cells_by                = "seurat_clusters",
+            cell_size                     = 2,
+            trajectory_graph_color        = "black",
+            trajectory_graph_segment_size = 1.25)
+```
+
+```{r, Figure 2B right trajectory analysis}
+cds <- order_cells (cds)
+```
+
+```{r, Figure 2B right trajectory}
+plot_cells (cds,
+            color_cells_by                = "pseudotime",
+            label_cell_groups             = FALSE,
+            label_leaves                  = FALSE,
+            label_branch_points           = FALSE,
+            graph_label_size              = 1.5,
+            cell_size                     = 2,
+            trajectory_graph_color        = "black",
+            trajectory_graph_segment_size = 1.25)
+```
+
+# Slingshot Analysis
+
+```{r}
+         Trophoblasts.sce                  <- as.SingleCellExperiment (Trophoblasts, assay = "RNA")
+colData (Trophoblasts.sce)$seurat_clusters <- as.character            (Trophoblasts@active.ident) # from factor to character                 
+         Trophoblasts.sce                  <- slingshot               (Trophoblasts.sce,
+                                                                       clusterLabels = 'seurat_clusters',
+                                                                       reducedDim    = 'UMAP',
+                                                                       start.clus    = 'CTB 2',
+                                                                       end.clus      = c('EVT', 'SCTp'),
+                                                                       stretch       = 0,
+                                                                       extend        = 'n',
+                                                                       omega         = TRUE)
+
+colors   <- colorRampPalette (brewer.pal (11, 'Spectral') [-6]) (100)
+plotcol1 <- colors [cut (slingPseudotime (Trophoblasts.sce, na = FALSE) [ , 1], breaks = 100) ]
+plotcol2 <- colors [cut (slingPseudotime (Trophoblasts.sce, na = FALSE) [ , 2], breaks = 100) ]
+plotcol3 <- colors [cut (slingPseudotime (Trophoblasts.sce, na = FALSE) [ , 3], breaks = 100) ]
+
+plot  (reducedDims      (Trophoblasts.sce)$UMAP,  col = plotcol1, pch  = 16,       asp = 1)                       
+lines (SlingshotDataSet (Trophoblasts.sce),       lwd = 2,       type = 'lineage', col = 'black', show.constraints = TRUE)
+plot  (reducedDims      (Trophoblasts.sce)$UMAP,  col = plotcol2, pch  = 16,       asp = 1)                       
+lines (SlingshotDataSet (Trophoblasts.sce),       lwd = 2,       type = 'lineage', col = 'black', show.constraints = TRUE)
+plot  (reducedDims      (Trophoblasts.sce)$UMAP,  col = plotcol3, pch  = 16,       asp = 1)                       
+lines (SlingshotDataSet (Trophoblasts.sce),       lwd = 2,       type = 'lineage', col = 'black', show.constraints = TRUE)
+
+summary (Trophoblasts.sce$slingPseudotime_1)
+summary (Trophoblasts.sce$slingPseudotime_2)
+summary (Trophoblasts.sce$slingPseudotime_3)
+```
+
+```{r, Supplemental figure 3A trajectory 1}
+plot  (reducedDims      (Trophoblasts.sce)$UMAP, col = plotcol1, pch  = 16,        asp = 1)                       
+lines (SlingshotDataSet (Trophoblasts.sce),      lwd = 2,        type = 'lineage', col = 'black', show.constraints = TRUE)
+lgd <- matrix      (colors)
+       rasterImage (lgd, 1, -3, -4, 8)
+```
+
+```{r, Supplemental figure 3A trajectory 2}
+plot  (reducedDims      (Trophoblasts.sce)$UMAP, col = plotcol2, pch  = 16,        asp = 1)                       
+lines (SlingshotDataSet (Trophoblasts.sce),      lwd = 2,        type = 'lineage', col = 'black', show.constraints = TRUE)
+lgd <- matrix      (colors)
+       rasterImage (lgd, 1, -3, -4, 8)
+```
+
+```{r, Supplemental figure 3A trajectory 3}
+plot  (reducedDims      (Trophoblasts.sce)$UMAP, col = plotcol3, pch  = 16,        asp = 1)                       
+lines (SlingshotDataSet (Trophoblasts.sce),      lwd = 2,        type = 'lineage', col = 'black', show.constraints = TRUE)
+lgd <- matrix      (colors)
+       rasterImage (lgd, 1, -3, -4, 8)
+```
+
+```{r, Supplemental figure 3D}
+plotGenePseudotime (Trophoblasts.sce, "BCAM")
+```

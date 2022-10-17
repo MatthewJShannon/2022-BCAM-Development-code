@@ -1,0 +1,188 @@
+---
+title: "BCAM PUBLISHED MIXED ANALYSES"
+author: "Matthew J Shannon"
+date: "12/08/2022"
+output: html_document
+---
+
+```{r}
+devtools::install_github ('chris-mcginnis-ucsf/DoubletFinder')
+devtools::install_github ('satijalab/seurat-wrappers')
+remotes::install_github  ("mojaveazure/seurat-disk")
+devtools::install_github ("velocyto-team/velocyto.R")
+BiocManager::install     ("pcaMethods")
+BiocManager::install     ('MAST')
+BiocManager::install     ('org.Hs.eg.db')
+BiocManager::install     (version = "3.12")
+BiocManager::install     ('Seurat')
+BiocManager::install     ('readxl')
+BiocManager::install     ('modes')
+BiocManager::install     ('pheatmap')
+BiocManager::install     ('limma')
+BiocManager::install     ('clustree')
+BiocManager::install     ('clusterProfiler')
+BiocManager::install     ('EnhancedVolcano')
+install.packages         ('fields')
+install.packages         ('plotly')
+install.packages         ("VennDiagram")
+install.packages         ("xlsx")
+library                  (Seurat)
+library                  (Matrix)
+library                  (dplyr)
+library                  (ggplot2)
+library                  (cowplot)
+library                  (tibble)
+library                  (readxl)
+library                  (sctransform)
+library                  (fields)
+library                  (KernSmooth)
+library                  (ROCR)
+library                  (parallel)
+library                  (reshape2)
+library                  (pheatmap)
+library                  (DoubletFinder)
+library                  (limma)
+library                  (SeuratWrappers)
+library                  (SeuratDisk)
+library                  (plotly)
+library                  (clustree)
+library                  (velocyto.R)
+library                  (MAST)
+library                  (EnhancedVolcano)
+library                  (clusterProfiler)
+library                  (AnnotationDbi)
+library                  (org.Hs.eg.db)
+library                  (VennDiagram)
+library                  (RColorBrewer)
+library                  (ggpubr)
+library                  (plotly)
+library                  (xlsx)
+```
+
+```{r, Figure 4D}
+Idents   (Mixed_Trophoblasts) <- "Type"
+UMAPPlot (Mixed_Trophoblasts, label = TRUE, order = -TRUE)
+```
+
+```{r, Figure 4E}
+Idents   (Mixed_Trophoblasts) <- "seurat_clusters"
+UMAPPlot (Mixed_Trophoblasts, label = TRUE)
+```
+
+```{r, Table 2.3 analysis}
+DefaultAssay (Mixed_Trophoblasts) <- "RNA"
+
+Mixed_Trophoblast.markers <- FindAllMarkers (object   = Mixed_Trophoblasts,
+                                             only.pos = TRUE,
+                                             min.pct  = 0.25, 
+                                             test.use = "MAST")
+Mixed_Trophoblast.markers %>% group_by (cluster) %>% top_n (20, avg_log2FC)
+```
+
+```{r, Table 2.3 export}
+write.xlsx (Mixed_Trophoblast.markers, file = "Mixed_Trophoblast.markers.xlsx")
+```
+
+```{r, Figure 4F left barplot}
+ggplot             (Mixed_Trophoblasts@meta.data, aes (x = Mixed_Trophoblasts$seurat_clusters, fill = Mixed_Trophoblasts$Type)) + 
+geom_bar           (position     = "fill") + 
+theme_classic2     () +
+scale_y_continuous (labels       = scales::percent) +
+theme              (text         = element_text (size   = 35)) + 
+theme              (axis.text    = element_text (size   = 35)) + 
+theme              (axis.title.x = element_text (face   = "bold")) +
+theme              (axis.title.y = element_text (face   = "bold")) + 
+theme              (legend.text  = element_text (size   = 15)) +
+theme              (axis.text.y  = element_text (angle  = 90)) +
+theme              (axis.text.y  = element_text (hjust  = 0.5)) +
+theme              (axis.text.x  = element_text (colour = "black")) +
+theme              (axis.text.y  = element_text (colour = "black")) +
+xlab               ("Mixed trophoblast state") +
+ylab               ("Cell Proportion")
+```
+
+```{r, Figure 4F right barplot}
+ggplot             (Mixed_Trophoblasts@meta.data, aes (x = Mixed_Trophoblasts$Type, fill = Mixed_Trophoblasts$seurat_clusters)) + 
+geom_bar           (position     = "fill") + 
+theme_classic2     () +
+scale_y_continuous (labels       = scales::percent) +
+theme              (text         = element_text (size   = 35)) + 
+theme              (axis.text    = element_text (size   = 35)) + 
+theme              (axis.title.x = element_text (face   = "bold")) +
+theme              (axis.title.y = element_text (face   = "bold")) + 
+theme              (legend.text  = element_text (size   = 15)) +
+theme              (axis.text.y  = element_text (angle  = 90)) +
+theme              (axis.text.y  = element_text (hjust  = 0.5)) +
+theme              (axis.text.x  = element_text (colour = "black")) +
+theme              (axis.text.y  = element_text (colour = "black")) +
+xlab               ("Data Type") +
+ylab               ("Cell Proportion")
+```
+
+```{r, Figure 4G}
+DefaultAssay (Mixed_Trophoblasts) <- "RNA"
+cluster.averages                  <- AverageExpression (Mixed_Trophoblasts, return.seurat = TRUE)
+
+genelist <- c("CGB8",     "CGB",                                                        # SCT  markers
+              "ERVFRD-1", "ERVV-1", "SDC1",  "TFAP2A",                                  # SCTp markers
+              "GATA2",    "GATA3",  "KRT7",                                             # CTB  markers
+              "HLA-G",    "ITGA5",  "ITGA1", "NOTCH2", "NOTCH1",                        # EVT  markers
+              "ITGA2",    "SOX9",                                                       # Column progenitor CTB marker
+              "EGFR",     "TFAP2C",                                                     # CTB markers
+              "YAP1",     "TP63",   "ITGA6", "CDX2",  "ELF5", "BMP4", "PAGE4", "TEAD4", # Progenitor CTB markers
+              "MKI67",    "CCNA2")                                                      # Proliferative markers
+my_levels <- c("CTB 4", "CTB 3", "CTB 2", "CTB 1", "cCTB 2", "cCTB 1", "EVT", "SCTp 1", "SCTp 2")
+
+cluster.averages@active.ident <- factor (cluster.averages@active.ident, levels = my_levels)
+
+DoHeatmap            (cluster.averages,
+                      features     = genelist,
+                      size         = 5,
+                      angle        = 270,
+                      hjust        = 1,
+                      group.bar    = FALSE,
+                      draw.lines   = FALSE,
+                      raster       = FALSE) +
+scale_fill_gradientn (colours      = colorRampPalette (rev (brewer.pal (n = 7, name = "RdYlBu"))) (100)) +
+theme                (text         = element_text     (size  = 40)) + 
+theme                (axis.text    = element_text     (size  = 35)) + 
+theme                (axis.title.y = element_text     (face  = "bold")) +
+theme                (axis.text.y  = element_text     (face  = "italic", hjust = 1)) +
+theme                (axis.text.x  = element_text     (vjust = 0.5, hjust = 0, face = "bold", angle = 270)) + 
+theme                (legend.text  = element_text     (size  = 15))
+
+rm (cluster.averages)
+```
+
+```{r, Figure 4J}
+Idents  (Mixed_Trophoblasts) <- "Type"
+VlnPlot (Mixed_Trophoblasts, features = c("BCAM"), assay = "RNA", pt.size = 0) + NoLegend ()
+```
+
+```{r, Figure 4K}
+FeaturePlot (Mixed_Trophoblasts, features = c("BCAM"), label = FALSE, min.cutoff = 0, order = TRUE, cols = c("grey", "red")) + NoLegend ()
+```
+
+```{r, Supplemental figure 4B}
+Idents (Mixed_Trophoblasts)    <- "seurat_clusters"
+Mixed_Trophoblasts$celltype.ID <- paste      (Idents (Mixed_Trophoblasts), Mixed_Trophoblasts$Type, sep = "_")
+Mixed_Trophoblasts$celltype    <- Idents     (Mixed_Trophoblasts)
+Idents (Mixed_Trophoblasts)    <- "celltype.ID"
+table  (Mixed_Trophoblasts$celltype.ID)
+
+av.exp    <- AverageExpression (Mixed_Trophoblasts)$RNA
+cor.exp   <- as.data.frame     (cor (av.exp))
+cor.exp$x <- rownames          (cor.exp)
+cor.df    <- tidyr::gather     (data = cor.exp, y, correlation, c('CTB 1_in vivo',  'CTB 1_in vitro',
+                                                                  'CTB 2_in vivo',  'CTB 2_in vitro',
+                                                                  'CTB 3_in vivo',  'CTB 3_in vitro',
+                                                                  'CTB 4_in vivo',  'CTB 4_in vitro',
+                                                                  'SCTp 1_in vivo', 'SCTp 1_in vitro',
+                                                                  'SCTp 2_in vivo', 'SCTp 2_in vitro',
+                                                                  'cCTB 1_in vivo', 'cCTB 1_in vitro',
+                                                                  'cCTB 2_in vivo', 'cCTB 2_in vitro',
+                                                                  'EVT_in vivo',    'EVT_in vitro' ))
+library(viridis)
+ggplot (cor.df, aes(x, y, fill = correlation)) + geom_tile () +
+scale_fill_gradientn (colours      = colorRampPalette (rev (brewer.pal (n = 7, name = "RdYlBu"))) (100))
+```
